@@ -42,3 +42,36 @@ WriteParquet <- function(df, schema, file_path) {
   arrow::write_parquet(table, file_path, compression = "ZSTD")
 }
 
+
+# https://stackoverflow.com/questions/68589841/r-implementation-of-ecb-aes-128-not-compatible
+pad <- function(plaintext) {
+  block_length <- 16
+  bytes_to_pad <- block_length - (nchar(plaintext) %% block_length)
+  padded_raw <- c(charToRaw(plaintext), rep(as.raw(bytes_to_pad), times = bytes_to_pad))
+  padded_raw
+}
+
+unpad <- function(plaintext) {
+  padded_raw <- charToRaw(plaintext)
+  last_byte <- tail(padded_raw, 1)
+  bytes_to_remove <- as.integer(last_byte)
+  if (bytes_to_remove > 0 && bytes_to_remove <= length(padded_raw)) {
+    unpadded_raw <- head(padded_raw, -bytes_to_remove)
+    return(rawToChar(unpadded_raw))
+  } else {
+    stop("Invalid padding")
+  }
+}
+
+# AES ECB encrypt 
+AesEcbEncrypt <- function(bytea_key, data) {
+  aes_ecb <- digest::AES(key = bytea_key, mode = "ECB")
+  enc_string <- aes_ecb$encrypt(pad(data))
+  return(openssl::base64_encode(enc_string))
+}
+
+AesEcbDecrypt <- function(bytea_key, encode_data) {
+  aes_ecb <- digest::AES(key = bytea_key, mode = "ECB")
+  s <- aes_ecb$decrypt(openssl::base64_decode(encode_data))
+  return(unpad(s))
+}
